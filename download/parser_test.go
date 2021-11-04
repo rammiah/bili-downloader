@@ -1,4 +1,4 @@
-package playurl
+package download
 
 import (
 	"fmt"
@@ -8,11 +8,11 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestGetPlayUrlsById(t *testing.T) {
+func TestGetVideoInfosById(t *testing.T) {
 	const (
-		BVId = "BV16b4y1b7fH"
+		BVId = "BV1pP4y1b7iP"
 	)
-	urls, err := GetPlayUrlsById(BVId)
+	urls, err := GetVideoInfosById(BVId)
 	require.Nil(t, err)
 	fmt.Printf("%v\n", utils.Json(urls))
 }
