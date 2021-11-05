@@ -55,7 +55,7 @@ func (wc *WriteCounter) Reset() int64 {
 func TestDownloadVideo(t *testing.T) {
 	info, err := GetDownloadInfoByAidCid(VideoID, Avid, Cid)
 	require.Nil(t, err)
-	err = AuthVideo(VideoID, info.Url)
+	err = authVideo(VideoID, info.Url)
 	require.Nil(t, err)
 	wc := new(WriteCounter)
 	hash := md5.New()
@@ -68,7 +68,7 @@ func TestDownloadVideo(t *testing.T) {
 func TestAuthVideo(t *testing.T) {
 	info, err := GetDownloadInfoByAidCid(VideoID, Avid, Cid)
 	require.Nil(t, err)
-	err = AuthVideo(VideoID, info.Url)
+	err = authVideo(VideoID, info.Url)
 	require.Nil(t, err)
 	if err != nil {
 		log.Errorf("auth error: %v", err)

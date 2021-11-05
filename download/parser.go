@@ -148,7 +148,20 @@ func (p *UrlProcessor) QueryAidCids() error {
 					Duration: length,
 					Part:     part,
 				}
+				// buf, _ := page.MarshalJSON()
+				// log.Infof("page content is %s", buf)
+				log.Infof("parse page %v, part %v success", pageNo, part)
 				playUrls = append(playUrls, url)
+			}
+			if cnt == 1 {
+				titleNode, err := sonic.GetFromString(jsTxt, "videoData", "title")
+				if err != nil {
+					log.Errorf("parse title error: %v", err)
+					return err
+				}
+				title, _ := titleNode.String()
+				log.Infof("only 1 video, use title %v for part name", title)
+				playUrls[0].Part = title
 			}
 			log.Infof("parse url for %v success, aid %v, cids count %v", p.videoId, avid, len(playUrls))
 			p.urls = playUrls

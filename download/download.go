@@ -108,7 +108,7 @@ func GetDownloadInfoByAidCid(videoId string, avid, cid int64) (*DownloadInfo, er
 }
 
 func DownloadVideo(info *DownloadInfo, target io.Writer) error {
-	if err := AuthVideo(info.VideoID, info.Url); err != nil {
+	if err := authVideo(info.VideoID, info.Url); err != nil {
 		log.Errorf("auth video error: %v", err)
 		return err
 	}
@@ -163,7 +163,7 @@ func DownloadVideo(info *DownloadInfo, target io.Writer) error {
 	return nil
 }
 
-func AuthVideo(videoId, videoUrl string) error {
+func authVideo(videoId, videoUrl string) error {
 	req, err := http.NewRequest(http.MethodOptions, videoUrl, nil)
 	if err != nil {
 		log.Errorf("new request error: %v", err)
