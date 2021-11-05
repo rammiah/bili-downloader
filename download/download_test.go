@@ -1,14 +1,24 @@
 package download
 
 import (
+	"crypto/md5"
+	"encoding/hex"
 	"fmt"
 	"io"
+	"sync/atomic"
 	"testing"
 
 	"github.com/apex/log"
 	"github.com/rammiah/bili-downloader/download/cookie"
 	"github.com/rammiah/bili-downloader/utils"
 	"github.com/stretchr/testify/require"
+)
+
+const (
+	VideoID       = "BV1pP4y1b7iP"
+	Avid    int64 = 891245009
+	Cid     int64 = 428280666
+	MD5           = "2a65e65f2db52d8ddc163c3d7c6cd7b2"
 )
 
 func TestMain(m *testing.M) {
@@ -18,11 +28,7 @@ func TestMain(m *testing.M) {
 }
 
 func TestGetDownloadInfoByAidCid(t *testing.T) {
-	var (
-		avid int64 = 891245009
-		cid  int64 = 428280666
-	)
-	info, err := GetDownloadInfoByAidCid(avid, cid)
+	info, err := GetDownloadInfoByAidCid(VideoID, Avid, Cid)
 	require.Nil(t, err)
 	require.NotNil(t, info)
 	require.EqualValues(t, 80, info.Qn)
@@ -31,13 +37,40 @@ func TestGetDownloadInfoByAidCid(t *testing.T) {
 	fmt.Printf("download info is: %v\n", utils.Json(info))
 }
 
-func TestDownloadVideo(t *testing.T) {
-	const (
-		URL = "https://upos-sz-mirrorcoso1.bilivideo.com/upgcxcode/63/12/428591263/428591263-1-80.flv?e=ig8euxZM2rNcNbNzhwdVhwdlhbhVhwdVhoNvNC8BqJIzNbfqXBvEqxTEto8BTrNvN0GvT90W5JZMkX_YN0MvXg8gNEV4NC8xNEV4N03eN0B5tZlqNxTEto8BTrNvNeZVuJ10Kj_g2UB02J0mN0B5tZlqNCNEto8BTrNvNC7MTX502C8f2jmMQJ6mqF2fka1mqx6gqj0eN0B599M=&uipk=5&nbs=1&deadline=1636051791&gen=playurlv2&os=coso1bv&oi=2070954129&trid=8374c8d0169547efb5f7ba624eb1e861u&platform=pc&upsig=b5499fe13bcccf748583128411e3a444&uparams=e,uipk,nbs,deadline,gen,os,oi,trid,platform&mid=101994113&bvc=vod&nettype=0&orderid=0,3&agrr=1&logo=80000000"
-	)
+type WriteCounter int64
 
-	err := DownloadVideo(&DownloadInfo{
-		Url: URL,
-	}, io.Discard)
+func (wc *WriteCounter) Write(data []byte) (int, error) {
+	atomic.AddInt64((*int64)(wc), int64(len(data)))
+	return len(data), nil
+}
+
+func (wc *WriteCounter) GetCount() int64 {
+	return atomic.LoadInt64((*int64)(wc))
+}
+
+func (wc *WriteCounter) Reset() int64 {
+	return atomic.SwapInt64((*int64)(wc), 0)
+}
+
+func TestDownloadVideo(t *testing.T) {
+	info, err := GetDownloadInfoByAidCid(VideoID, Avid, Cid)
 	require.Nil(t, err)
+	err = AuthVideo(VideoID, info.Url)
+	require.Nil(t, err)
+	wc := new(WriteCounter)
+	hash := md5.New()
+	err = DownloadVideo(info, io.MultiWriter(wc, hash))
+	require.Nil(t, err)
+	require.EqualValues(t, info.Size, wc.GetCount())
+	require.Equal(t, MD5, hex.EncodeToString(hash.Sum(nil)))
+}
+
+func TestAuthVideo(t *testing.T) {
+	info, err := GetDownloadInfoByAidCid(VideoID, Avid, Cid)
+	require.Nil(t, err)
+	err = AuthVideo(VideoID, info.Url)
+	require.Nil(t, err)
+	if err != nil {
+		log.Errorf("auth error: %v", err)
+	}
 }

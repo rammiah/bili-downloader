@@ -22,7 +22,7 @@ func main() {
 	}
 	fmt.Printf("%v\n", utils.Json(resp))
 	for _, video := range resp {
-		info, err := download.GetDownloadInfoByAidCid(video.Avid, video.Cid)
+		info, err := download.GetDownloadInfoByAidCid(id, video.Avid, video.Cid)
 		if err != nil {
 			panic(err)
 		}
