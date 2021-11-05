@@ -108,29 +108,6 @@ func GetDownloadInfoByAidCid(videoId string, avid, cid int64) (*DownloadInfo, er
 }
 
 func DownloadVideo(info *DownloadInfo, target io.Writer) error {
-	/*
-		accept: *\*
-			accept-encoding: identity
-			accept-language: zh-CN,zh;q=0.9,en-US;q=0.8,en;q=0.7
-			dnt: 1
-			origin: https://www.bilibili.com
-			range: bytes=218103821-234881037
-			referer: https://www.bilibili.com/video/BV1gF411Y7Z3
-			sec-ch-ua: "Google Chrome";v="95", "Chromium";v="95", ";Not A Brand";v="99"
-			sec-ch-ua-mobile: ?0
-			sec-ch-ua-platform: "Windows"
-			sec-fetch-dest: empty
-			sec-fetch-mode: cors
-			sec-fetch-site: cross-site
-			user-agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/95.0.4638.69 Safari/537.36
-	*/
-	// u, err := url.Parse(info.Url)
-	// if err != nil {
-	//     return err
-	// }
-	// fmt.Printf("url is %v\n", utils.Json(u))
-	// q, _ := url.ParseQuery(u.RawQuery)
-	// fmt.Printf("query is %v\n", utils.Json(q))
 	if err := AuthVideo(info.VideoID, info.Url); err != nil {
 		log.Errorf("auth video error: %v", err)
 		return err
@@ -193,10 +170,6 @@ func AuthVideo(videoId, videoUrl string) error {
 		return err
 	}
 	head := map[string]string{
-		// ":authority":                     req.URL.Host,
-		// ":method":                        http.MethodOptions,
-		// ":path":                          req.URL.Path,
-		// ":scheme":                        req.URL.Scheme,
 		"accept":                         "*/*",
 		"accept-encoding":                "gzip, deflate, br",
 		"access-control-request-headers": "range",
