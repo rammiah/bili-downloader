@@ -8,6 +8,7 @@ import (
 
 	"github.com/apex/log"
 	"github.com/bytedance/sonic"
+	"github.com/rammiah/bili-downloader/consts"
 	"github.com/rammiah/bili-downloader/download/httpcli"
 )
 
@@ -19,6 +20,7 @@ type DownloadInfo struct {
 	Length  int64  `json:"length"`
 	Size    int64  `json:"size"`
 	Url     string `json:"url"`
+	Format  string `json:"format"`
 }
 
 func GetDownloadInfoByAidCid(videoId string, avid, cid int64) (*DownloadInfo, error) {
@@ -94,7 +96,11 @@ func GetDownloadInfoByAidCid(videoId string, avid, cid int64) (*DownloadInfo, er
 		size, _   = obj.Get("size").Int64()
 		u, _      = obj.Get("url").String()
 		qn, _     = data.Get("quality").Int64()
+		format, _ = data.Get("format").String()
 	)
+	if v, ok := consts.FormatBiliToFile[format]; ok {
+		format = v
+	}
 
 	return &DownloadInfo{
 		VideoID: videoId,
@@ -104,63 +110,8 @@ func GetDownloadInfoByAidCid(videoId string, avid, cid int64) (*DownloadInfo, er
 		Length:  length,
 		Size:    size,
 		Url:     u,
+		Format:  format,
 	}, nil
-}
-
-func DownloadVideo(info *DownloadInfo, target io.Writer) error {
-	if err := authVideo(info.VideoID, info.Url); err != nil {
-		log.Errorf("auth video error: %v", err)
-		return err
-	}
-
-	req, err := http.NewRequest(http.MethodGet, info.Url, nil)
-	if err != nil {
-		return err
-	}
-	params := map[string]string{
-		"accept":             "*/*",
-		"accept-encoding":    "identity",
-		"accept-language":    "zh-CN,zh;q=0.9,en-US;q=0.8,en;q=0.7",
-		"dnt":                "1",
-		"origin":             "https://www.bilibili.com",
-		"referer":            "https://www.bilibili.com/video/" + info.VideoID,
-		"sec-ch-ua":          `"Google Chrome";v="95", "Chromium";v="95", ";Not A Brand";v="99"`,
-		"sec-ch-ua-mobile":   "?0",
-		"sec-ch-ua-platform": "Windows",
-		"sec-fetch-dest":     "empty",
-		"sec-fetch-mode":     "cors",
-		"sec-fetch-site":     "cross-site",
-		"user-agent":         httpcli.UA,
-	}
-
-	for k, v := range params {
-		req.Header.Set(k, v)
-	}
-
-	// set range header
-	req.Header.Set("range", "0-"+strconv.FormatInt(info.Size-1, 10))
-
-	resp, err := httpcli.Inst.Do(req)
-	if err != nil {
-		return err
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("get status not ok: %v", resp.Status)
-	}
-	if resp.ContentLength != info.Size {
-		return fmt.Errorf("content size not same: expect %v got %v", info.Size, resp.ContentLength)
-	}
-
-	cnt, err := io.Copy(target, resp.Body)
-	if err != nil {
-		return err
-	}
-
-	log.Infof("download size %v bytes", cnt)
-
-	return nil
 }
 
 func authVideo(videoId, videoUrl string) error {

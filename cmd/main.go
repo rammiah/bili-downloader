@@ -2,14 +2,12 @@ package main
 
 import (
 	"flag"
-	"fmt"
 	"os"
 	"strings"
 
 	"github.com/apex/log"
 	"github.com/rammiah/bili-downloader/download"
 	"github.com/rammiah/bili-downloader/download/cookie"
-	"github.com/rammiah/bili-downloader/utils"
 )
 
 func main() {
@@ -28,23 +26,25 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
-	fmt.Printf("%v\n", utils.Json(resp))
+	// fmt.Printf("%v\n", utils.Json(resp))
 	for _, video := range resp {
 		info, err := download.GetDownloadInfoByAidCid(id, video.Avid, video.Cid)
 		if err != nil {
 			panic(err)
 		}
-		log.Infof("start download file %v.flv, size %v bytes", video.Part, info.Size)
-		of, err := os.OpenFile(video.Part+".flv", os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0644)
+		log.Infof("start download file %v.%v, size %v bytes", video.Part, info.Format, info.Size)
+		of, err := os.OpenFile(video.Part+"."+info.Format, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0644)
 		if err != nil {
 			panic(err)
 		}
-		if err := download.DownloadVideo(info, of); err != nil {
-			of.Close()
-			panic(err)
-		}
-		log.Infof("start download file %v.flv success", video.Part)
+		download.NewVideoDownloader(info, of).Download()
+		// ; err != nil {
+		//     of.Close()
+		//     panic(err)
+		// }
+		log.Infof("download file %v.%v success", info.Format, video.Part)
 		of.Sync()
 		of.Close()
 	}
+	log.Infof("download %v success", id)
 }
