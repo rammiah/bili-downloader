@@ -12,9 +12,10 @@ const (
 )
 
 var FormatBiliToFile = map[string]string{
-	"hdflv2": "flv",
-	"flv":    "flv",
-	"flv720": "flv",
-	"flv480": "flv",
-	"mp4":    "mp4",
+	"hdflv2":  "flv",
+	"flv_p60": "flv",
+	"flv":     "flv",
+	"flv720":  "flv",
+	"flv480":  "flv",
+	"mp4":     "mp4",
 }

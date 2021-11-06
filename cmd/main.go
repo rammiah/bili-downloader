@@ -28,21 +28,20 @@ func main() {
 	}
 	// fmt.Printf("%v\n", utils.Json(resp))
 	for _, video := range resp {
+		log.Infof("process avid %v, cid %v", video.Avid, video.Cid)
 		info, err := download.GetDownloadInfoByAidCid(id, video.Avid, video.Cid)
 		if err != nil {
 			panic(err)
 		}
-		log.Infof("start download file %v.%v, size %v bytes", video.Part, info.Format, info.Size)
-		of, err := os.OpenFile(video.Part+"."+info.Format, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0644)
+		fileName := video.Part + "." + info.Format
+		fileName = strings.ReplaceAll(fileName, "/", " ")
+		log.Infof("start download file %v, size %v bytes", fileName, info.Size)
+		of, err := os.OpenFile(fileName, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0644)
 		if err != nil {
 			panic(err)
 		}
 		download.NewVideoDownloader(info, of).Download()
-		// ; err != nil {
-		//     of.Close()
-		//     panic(err)
-		// }
-		log.Infof("download file %v.%v success", info.Format, video.Part)
+		log.Infof("download file %v success", fileName)
 		of.Sync()
 		of.Close()
 	}
