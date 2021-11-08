@@ -1,15 +1,16 @@
 package download
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
 	"strconv"
 
 	"github.com/apex/log"
-	"github.com/bytedance/sonic"
 	"github.com/rammiah/bili-downloader/consts"
 	"github.com/rammiah/bili-downloader/download/httpcli"
+	"github.com/tidwall/gjson"
 )
 
 type DownloadInfo struct {
@@ -67,36 +68,27 @@ func GetDownloadInfoByAidCid(videoId string, avid, cid int64) (*DownloadInfo, er
 		return nil, err
 	}
 
-	if code, err := sonic.Get(buf, "code"); err != nil {
-		return nil, err
-	} else if code, err := code.Int64(); err != nil {
-		return nil, err
-	} else if code != 0 {
-		return nil, fmt.Errorf("ret code not 0: %v", code)
+	code := gjson.GetBytes(buf, "code")
+	if code.Type == gjson.Null {
+		return nil, errors.New("null json")
+	} else if code.Int() != 0 {
+		return nil, fmt.Errorf("code not 0: %v", code.Int())
 	}
 
-	data, err := sonic.Get(buf, "data")
-	if err != nil {
-		return nil, err
-	}
+	data := gjson.GetBytes(buf, "data")
 	durl := data.Get("durl")
-	if err := durl.Load(); err != nil {
-		return nil, err
-	}
 
-	if n, err := durl.Len(); err != nil {
-		return nil, err
-	} else if n == 0 {
+	if len(durl.Array()) == 0 {
 		return nil, fmt.Errorf("not valid durl, count is 0")
 	}
 
-	obj := durl.Index(0)
+	obj := durl.Get("0")
 	var (
-		length, _ = obj.Get("length").Int64()
-		size, _   = obj.Get("size").Int64()
-		u, _      = obj.Get("url").String()
-		qn, _     = data.Get("quality").Int64()
-		format, _ = data.Get("format").String()
+		length = obj.Get("length").Int()
+		size   = obj.Get("size").Int()
+		u      = obj.Get("url").String()
+		qn     = data.Get("quality").Int()
+		format = data.Get("format").String()
 	)
 	if v, ok := consts.FormatBiliToFile[format]; ok {
 		format = v

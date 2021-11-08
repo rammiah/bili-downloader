@@ -54,13 +54,13 @@ func (wc *WriteCounter) Reset() int64 {
 
 func TestDownloadVideo(t *testing.T) {
 	info, err := GetDownloadInfoByAidCid(VideoID, Avid, Cid)
+	log.Infof("video %v info %v", VideoID, utils.Json(info))
 	require.Nil(t, err)
 	err = authVideo(VideoID, info.Url)
 	require.Nil(t, err)
 	wc := new(WriteCounter)
 	hash := md5.New()
-	err = DownloadVideo(info, io.MultiWriter(wc, hash))
-	require.Nil(t, err)
+	NewVideoDownloader(info, io.MultiWriter(wc, hash)).Download()
 	require.EqualValues(t, info.Size, wc.GetCount())
 	require.Equal(t, MD5, hex.EncodeToString(hash.Sum(nil)))
 }

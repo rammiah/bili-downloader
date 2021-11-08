@@ -1,14 +1,15 @@
 package download
 
 import (
+	"errors"
 	"fmt"
 	"net/http"
 	"strings"
 
 	"github.com/PuerkitoBio/goquery"
 	"github.com/apex/log"
-	"github.com/bytedance/sonic"
 	"github.com/rammiah/bili-downloader/download/httpcli"
+	"github.com/tidwall/gjson"
 )
 
 const (
@@ -113,33 +114,24 @@ func (p *UrlProcessor) QueryAidCids() error {
 			}
 			start += len(JS_START)
 			jsTxt := child.Data[start:end]
-			aidNode, err := sonic.GetFromString(jsTxt, "aid")
-			if err != nil {
-				return err
+			if !gjson.Valid(jsTxt) {
+				log.Infof("js text is valid json")
+				return errors.New("invalid json detected")
 			}
-			var avid int64
-			if v, err := aidNode.Int64(); err != nil {
-				return err
-			} else {
-				avid = v
+			avid := gjson.Get(jsTxt, "aid").Int()
+			pages := gjson.Get(jsTxt, "videoData.pages")
+			if !pages.Exists() {
+				return errors.New("pages not exists")
 			}
-			pages, err := sonic.GetFromString(jsTxt, "videoData", "pages")
-			if err != nil {
-				return err
-			}
-			// load childen nodes
-			_ = pages.Load()
-			cnt, err := pages.Len()
-			if err != nil {
-				return err
+			if !pages.IsArray() {
+				return errors.New("pages not array")
 			}
 
-			for i := 0; i < cnt; i++ {
-				page := pages.Index(i)
-				cid, _ := page.Get("cid").Int64()
-				pageNo, _ := page.Get("page").Int64()
-				part, _ := page.Get("part").String()
-				length, _ := page.Get("duration").Int64()
+			for _, page := range pages.Array() {
+				cid := page.Get("cid").Int()
+				pageNo := page.Get("page").Int()
+				part := page.Get("part").String()
+				length := page.Get("duration").Int()
 				url := &VideoInfo{
 					VideoID:  p.videoId,
 					Avid:     avid,
@@ -153,13 +145,8 @@ func (p *UrlProcessor) QueryAidCids() error {
 				log.Infof("parse page %v, part %v success", pageNo, part)
 				playUrls = append(playUrls, url)
 			}
-			if cnt == 1 {
-				titleNode, err := sonic.GetFromString(jsTxt, "videoData", "title")
-				if err != nil {
-					log.Errorf("parse title error: %v", err)
-					return err
-				}
-				title, _ := titleNode.String()
+			if len(playUrls) == 1 {
+				title := gjson.Get(jsTxt, "videoData.title").String()
 				log.Infof("only 1 video, use title %v for part name", title)
 				playUrls[0].Part = title
 			}
