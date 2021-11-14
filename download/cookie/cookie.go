@@ -6,9 +6,12 @@ import (
 	"net/http/cookiejar"
 	"net/url"
 	"os"
+	"path"
+	"path/filepath"
 	"strings"
 	"unicode"
 
+	"github.com/apex/log"
 	"golang.org/x/net/publicsuffix"
 )
 
@@ -47,12 +50,16 @@ func init() {
 	jar, _ = cookiejar.New(&cookiejar.Options{
 		PublicSuffixList: publicsuffix.List,
 	})
-	configPath := os.Getenv("HOME") + "/.config/bili-downloader/"
-	os.MkdirAll(configPath, 0755)
-	confFile := configPath + "cookie.txt"
-	_, err := os.Stat(configPath + "cookie.txt")
-	var ckTxt string
+	home, err := os.UserHomeDir()
 	if err != nil {
+		panic(err)
+	}
+	configPath := path.Join(home, ".config", "bili-downloader")
+	_ = os.MkdirAll(configPath, 0755)
+	confFile := filepath.Join(configPath, "cookie.txt")
+
+	var ckTxt string
+	if _, err := os.Stat(confFile); err != nil {
 		if !os.IsNotExist(err) {
 			panic(err)
 		}
@@ -69,11 +76,16 @@ func init() {
 
 // SaveCookies save cookies in jar to file
 func SaveCookies() {
-	configPath := os.Getenv("HOME") + "/.config/bili-downloader/"
-	os.MkdirAll(configPath, 0755)
-	confFile := configPath + "cookie.txt"
+	home, err := os.UserHomeDir()
+	if err != nil {
+		panic(err)
+	}
+	configPath := path.Join(home, ".config", "bili-downloader")
+	_ = os.MkdirAll(configPath, 0755)
+	confFile := filepath.Join(configPath, "cookie.txt")
 	of, err := os.OpenFile(confFile, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0644)
 	if err != nil {
+		log.Errorf("save cookie open file for write error: %v", err)
 		return
 	}
 	defer func() {

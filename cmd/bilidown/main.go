@@ -40,7 +40,12 @@ func main() {
 		if err != nil {
 			panic(err)
 		}
-		download.NewVideoDownloader(info, of).Download()
+		if err := download.NewVideoDownloader(info, of).Download(); err != nil {
+			log.Infof("download file error: %v", err)
+			of.Close()
+			os.Remove(fileName)
+			panic(err)
+		}
 		log.Infof("download file %v success", fileName)
 		of.Sync()
 		of.Close()

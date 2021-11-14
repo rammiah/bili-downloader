@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"runtime"
 	"sync"
+	"sync/atomic"
 
 	"github.com/apex/log"
 	"github.com/rammiah/bili-downloader/consts"
@@ -17,8 +18,26 @@ import (
 type VideoFragment struct {
 	Begin int64
 	End   int64
-	Ready bool
+	Ready Bool
 	Data  []byte
+}
+
+type Bool int32
+
+func (b *Bool) Get() bool {
+	return atomic.LoadInt32((*int32)(b)) == 1
+}
+
+func (b *Bool) Set(val bool) {
+	if val {
+		atomic.StoreInt32((*int32)(b), 1)
+		return
+	}
+	atomic.StoreInt32((*int32)(b), 0)
+}
+
+func (b *Bool) Clear() {
+	atomic.StoreInt32((*int32)(b), 0)
 }
 
 type VideoDownloader struct {
@@ -26,11 +45,12 @@ type VideoDownloader struct {
 	wg       *sync.WaitGroup
 	out      io.Writer
 	frags    []*VideoFragment
-	lock     *sync.Mutex
-	// cond     *sync.Cond
+	count    int64
+	pool     *sync.Pool
+	errVal   *atomic.Value
 
-	downIdx    int
-	unreadyIdx int
+	downIdx int64
+	redIdx  int64
 }
 
 func buildFrags(info *DownloadInfo) []*VideoFragment {
@@ -55,19 +75,23 @@ func buildFrags(info *DownloadInfo) []*VideoFragment {
 }
 
 func NewVideoDownloader(info *DownloadInfo, out io.Writer) *VideoDownloader {
-	lk := &sync.Mutex{}
-	return &VideoDownloader{
+	d := &VideoDownloader{
 		downInfo: info,
 		wg:       &sync.WaitGroup{},
 		out:      out,
 		frags:    buildFrags(info),
-		lock:     lk,
-		// cond: &sync.Cond{
-		//     L: lk,
-		// },
-		downIdx:    0,
-		unreadyIdx: 0,
+		downIdx:  0,
+		redIdx:   0,
+		pool: &sync.Pool{
+			New: func() interface{} {
+				return make([]byte, 0, consts.FragSize)
+			},
+		},
+		errVal: &atomic.Value{},
 	}
+	d.count = int64(len(d.frags))
+
+	return d
 }
 
 func (d *VideoDownloader) DownloadFragment(frag *VideoFragment) ([]byte, error) {
@@ -119,10 +143,10 @@ func (d *VideoDownloader) DownloadFragment(frag *VideoFragment) ([]byte, error) 
 	if resp.ContentLength != frag.End-frag.Begin+1 {
 		return nil, fmt.Errorf("content size not same: expect %v got %v", info.Size, resp.ContentLength)
 	}
-	// log.Infof("download request success")
 
-	buf := bytes.NewBuffer(nil)
-	buf.Grow(consts.FragSize)
+	buf := bytes.NewBuffer(d.pool.Get().([]byte))
+	// buf.Grow(consts.FragSize)
+	buf.Reset()
 
 	_, err = io.Copy(buf, resp.Body)
 	if err != nil {
@@ -133,53 +157,65 @@ func (d *VideoDownloader) DownloadFragment(frag *VideoFragment) ([]byte, error) 
 	// log.Infof("download size %v bytes", buf.Len())
 
 	return buf.Bytes(), nil
-
 }
 
-func (d *VideoDownloader) startWorker() {
+func (d *VideoDownloader) startWorker(id int) {
 	defer d.wg.Done()
 	for {
-		d.lock.Lock()
-		if d.downIdx == len(d.frags) {
-			// worker download mission done
-			// log.Infof("worker download done")
-			d.lock.Unlock()
+		// check error
+		if err := d.errVal.Load(); err != nil {
+			log.Infof("error detected: %v", err)
 			return
 		}
-		idx := d.downIdx
-		d.downIdx++
-		d.lock.Unlock()
+		idx := atomic.AddInt64(&d.downIdx, 1) - 1
+		if idx >= int64(len(d.frags)) {
+			log.Infof("worker %v exit", id)
+			return
+		}
+
 		frag := d.frags[idx]
 		log.Infof("download frag %v, %v - %v", idx, frag.Begin, frag.End)
 		data, err := d.DownloadFragment(frag)
 		if err != nil {
-			log.Errorf("download error: %v", err)
+			log.Errorf("download %v error: %v", idx, err)
+			d.errVal.Store(err)
 			return
 		}
-		log.Infof("download frag %v success", idx)
-		// 看下这个是不是可以写到target
-		d.lock.Lock()
-		frag.Ready = true
-		frag.Data = data
-		if d.unreadyIdx == idx {
-			log.Infof("start write from %v", idx)
-			// 是的，该我写了，并且要更新readyIdx
-			for d.unreadyIdx < d.downIdx && d.frags[d.unreadyIdx].Ready {
-				d.out.Write(d.frags[d.unreadyIdx].Data)
-				d.frags[d.unreadyIdx].Data = nil // for gc
-				log.Infof("write %v success", d.unreadyIdx)
-				d.unreadyIdx++
-			}
+
+		if err := d.errVal.Load(); err != nil {
+			log.Infof("error detected: %v\n", err)
+			return
 		}
-		d.lock.Unlock()
+
+		log.Infof("download frag %v success", idx)
+
+		// data for idx is ready
+		frag.Data = data
+		frag.Ready.Set(true)
+		if atomic.LoadInt64(&d.redIdx) == idx {
+			log.Infof("start write from %v", idx)
+			for idx < int64(len(d.frags)) && d.frags[idx].Ready.Get() {
+				d.out.Write(d.frags[idx].Data)
+				d.pool.Put(d.frags[idx].Data)
+				d.frags[idx].Data = nil
+				log.Infof("write %v success", idx)
+				idx++
+			}
+			atomic.StoreInt64(&d.redIdx, idx)
+		}
 	}
 }
 
-func (d *VideoDownloader) Download() {
+func (d *VideoDownloader) Download() error {
 	for i := 0; i < runtime.NumCPU(); i++ {
 		d.wg.Add(1)
-		go d.startWorker()
+		go d.startWorker(i)
 	}
 	d.wg.Wait()
+	if err := d.errVal.Load(); err != nil {
+		log.Infof("download failed, error: %v", err)
+		return err.(error)
+	}
 	log.Infof("download success")
+	return nil
 }
