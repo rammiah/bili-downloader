@@ -118,7 +118,7 @@ func parsePages(pageStr string) (func(int64) bool, error) {
 
 	return func(i int64) bool {
 		for _, rg := range rs {
-			if i >= rg.Start && i < rg.End {
+			if i >= rg.Start && i <= rg.End {
 				return true
 			}
 		}
