@@ -1,11 +1,13 @@
 package download
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"io"
 	"net/http"
 	"strconv"
+	"time"
 
 	"github.com/apex/log"
 	"github.com/rammiah/bili-downloader/consts"
@@ -18,8 +20,8 @@ type DownloadInfo struct {
 	Avid    int64  `json:"avid"`
 	Cid     int64  `json:"cid"`
 	Qn      int64  `json:"qn"`
-	Length  int64  `json:"length"`
-	Size    int64  `json:"size"`
+	Length  int64  `json:"length"` // 视频时长
+	Size    int64  `json:"size"`   // 文件大小
 	Url     string `json:"url"`
 	Format  string `json:"format"`
 }
@@ -107,7 +109,9 @@ func GetDownloadInfoByAidCid(videoId string, avid, cid int64) (*DownloadInfo, er
 }
 
 func authVideo(videoId, videoUrl string) error {
-	req, err := http.NewRequest(http.MethodOptions, videoUrl, nil)
+	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
+	defer cancel()
+	req, err := http.NewRequestWithContext(ctx, http.MethodOptions, videoUrl, nil)
 	if err != nil {
 		log.Errorf("new request error: %v", err)
 		return err

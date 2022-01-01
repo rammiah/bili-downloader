@@ -2,12 +2,17 @@ package download
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"io"
+	"math/rand"
 	"net/http"
+	"os"
 	"runtime"
 	"sync"
 	"sync/atomic"
+	"syscall"
+	"time"
 
 	"github.com/apex/log"
 	"github.com/rammiah/bili-downloader/consts"
@@ -18,8 +23,6 @@ import (
 type VideoFragment struct {
 	Begin int64
 	End   int64
-	Ready Bool
-	Data  []byte
 }
 
 type Bool int32
@@ -43,10 +46,9 @@ func (b *Bool) Clear() {
 type VideoDownloader struct {
 	downInfo *DownloadInfo
 	wg       *sync.WaitGroup
-	out      io.Writer
+	out      *os.File
 	frags    []*VideoFragment
 	count    int64
-	pool     *sync.Pool
 	errVal   *atomic.Value
 
 	downIdx int64
@@ -74,20 +76,15 @@ func buildFrags(info *DownloadInfo) []*VideoFragment {
 	return frags
 }
 
-func NewVideoDownloader(info *DownloadInfo, out io.Writer) *VideoDownloader {
+func NewVideoDownloader(info *DownloadInfo, out *os.File) *VideoDownloader {
+	syscall.Fallocate(int(out.Fd()), 0, 0, info.Size)
 	d := &VideoDownloader{
 		downInfo: info,
 		wg:       &sync.WaitGroup{},
 		out:      out,
 		frags:    buildFrags(info),
 		downIdx:  0,
-		redIdx:   0,
-		pool: &sync.Pool{
-			New: func() interface{} {
-				return make([]byte, 0, consts.FragSize)
-			},
-		},
-		errVal: &atomic.Value{},
+		errVal:   &atomic.Value{},
 	}
 	d.count = int64(len(d.frags))
 
@@ -103,7 +100,9 @@ func (d *VideoDownloader) DownloadFragment(frag *VideoFragment) ([]byte, error) 
 		return nil, err
 	}
 
-	req, err := http.NewRequest(http.MethodGet, info.Url, nil)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, info.Url, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -144,8 +143,8 @@ func (d *VideoDownloader) DownloadFragment(frag *VideoFragment) ([]byte, error) 
 		return nil, fmt.Errorf("content size not same: expect %v got %v", info.Size, resp.ContentLength)
 	}
 
-	buf := bytes.NewBuffer(d.pool.Get().([]byte))
-	// buf.Grow(consts.FragSize)
+	buf := bytes.NewBuffer(nil)
+	buf.Grow(consts.FragSize)
 	buf.Reset()
 
 	_, err = io.Copy(buf, resp.Body)
@@ -174,6 +173,8 @@ func (d *VideoDownloader) startWorker(id int) {
 		}
 
 		frag := d.frags[idx]
+		// random sleep
+		time.Sleep(time.Duration(rand.Intn(100)+200) * time.Millisecond)
 		log.Infof("download frag %v, %v - %v", idx, frag.Begin, frag.End)
 		data, err := d.DownloadFragment(frag)
 		if err != nil {
@@ -187,27 +188,20 @@ func (d *VideoDownloader) startWorker(id int) {
 			return
 		}
 
-		log.Infof("download frag %v success", idx)
-
-		// data for idx is ready
-		frag.Data = data
-		frag.Ready.Set(true)
-		if atomic.LoadInt64(&d.redIdx) == idx {
-			log.Infof("start write from %v", idx)
-			for idx < int64(len(d.frags)) && d.frags[idx].Ready.Get() {
-				d.out.Write(d.frags[idx].Data)
-				d.pool.Put(d.frags[idx].Data)
-				d.frags[idx].Data = nil
-				log.Infof("write %v success", idx)
-				idx++
-			}
-			atomic.StoreInt64(&d.redIdx, idx)
+		_, err = d.out.WriteAt(data, frag.Begin)
+		if err != nil {
+			log.Errorf("write file error: %v", err)
+			d.errVal.Store(err)
+			return
 		}
+
+		log.Infof("download frag %v success", idx)
 	}
 }
 
 func (d *VideoDownloader) Download() error {
-	for i := 0; i < runtime.NumCPU(); i++ {
+	DownThreadCnt := runtime.NumCPU()
+	for i := 0; i < DownThreadCnt; i++ {
 		d.wg.Add(1)
 		go d.startWorker(i)
 	}

@@ -20,5 +20,4 @@ func init() {
 		Jar:     cookie.GetCookieJar(),
 		Timeout: time.Minute,
 	}
-
 }

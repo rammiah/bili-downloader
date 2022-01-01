@@ -21,9 +21,10 @@ type VideoInfo struct {
 	VideoID  string `json:"video_id"` // video id, av/BV
 	Avid     int64  `json:"avid"`
 	Cid      int64  `json:"cid"`
-	Page     int64  `json:"page"`     // page no
-	Duration int64  `json:"duration"` // length in seconds
-	Part     string `json:"part"`     // part name
+	Title    string `json:"title"`
+	Page     int64  `json:"page"`      // page no
+	Duration int64  `json:"duration"`  // length in seconds
+	PartName string `json:"part_name"` // part name
 }
 
 type UrlProcessor struct {
@@ -127,6 +128,7 @@ func (p *UrlProcessor) QueryAidCids() error {
 				return errors.New("pages not array")
 			}
 
+			title := gjson.Get(jsTxt, "videoData.title").String()
 			for _, page := range pages.Array() {
 				cid := page.Get("cid").Int()
 				pageNo := page.Get("page").Int()
@@ -136,9 +138,10 @@ func (p *UrlProcessor) QueryAidCids() error {
 					VideoID:  p.videoId,
 					Avid:     avid,
 					Cid:      cid,
+					Title:    title,
 					Page:     pageNo,
 					Duration: length,
-					Part:     part,
+					PartName: part,
 				}
 				// buf, _ := page.MarshalJSON()
 				// log.Infof("page content is %s", buf)
@@ -146,9 +149,8 @@ func (p *UrlProcessor) QueryAidCids() error {
 				playUrls = append(playUrls, url)
 			}
 			if len(playUrls) == 1 {
-				title := gjson.Get(jsTxt, "videoData.title").String()
 				log.Infof("only 1 video, use title %v for part name", title)
-				playUrls[0].Part = title
+				playUrls[0].PartName = title
 			}
 			log.Infof("parse url for %v success, aid %v, cids count %v", p.videoId, avid, len(playUrls))
 			p.urls = playUrls

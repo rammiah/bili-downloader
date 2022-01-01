@@ -33,22 +33,30 @@ func main() {
 		return
 	}
 
-	resp, err := download.GetVideoInfosById(id)
+	infos, err := download.GetVideoInfosById(id)
 	if err != nil {
 		panic(err)
 	}
-	// fmt.Printf("%v\n", utils.Json(resp))
-	for _, video := range resp {
-		if !pageMatch(video.Page) {
-			log.Infof("page %v, %v skiped", video.Page, video.Part)
-			continue
+	// filter video infos
+	idx := 0
+	for _, info := range infos {
+		if pageMatch(info.Page) {
+			infos[idx] = info
+			idx++
 		}
+	}
+	infos = infos[:idx]
+	// fmt.Printf("%v\n", utils.Json(resp))
+	for _, video := range infos {
 		log.Infof("process avid %v, cid %v", video.Avid, video.Cid)
 		info, err := download.GetDownloadInfoByAidCid(id, video.Avid, video.Cid)
 		if err != nil {
 			panic(err)
 		}
-		fileName := video.Part + "." + info.Format
+		fileName := video.PartName + "." + info.Format
+		if len(infos) > 1 {
+			fileName = video.Title + " - " + fileName
+		}
 		fileName = strings.ReplaceAll(fileName, "/", " ")
 		log.Infof("start download file %v, size %v bytes", fileName, info.Size)
 		of, err := os.OpenFile(fileName, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0644)
@@ -111,7 +119,7 @@ func parsePages(pageStr string) (func(int64) bool, error) {
 			}
 			rs = append(rs, &Range{
 				Start: p,
-				End:   p + 1,
+				End:   p,
 			})
 		}
 	}

@@ -8,7 +8,7 @@ const (
 )
 
 const (
-	FragSize = 4 * MB
+	FragSize = 8 * MB
 )
 
 var FormatBiliToFile = map[string]string{

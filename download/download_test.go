@@ -1,10 +1,7 @@
 package download
 
 import (
-	"crypto/md5"
-	"encoding/hex"
 	"fmt"
-	"io"
 	"sync/atomic"
 	"testing"
 
@@ -52,18 +49,18 @@ func (wc *WriteCounter) Reset() int64 {
 	return atomic.SwapInt64((*int64)(wc), 0)
 }
 
-func TestDownloadVideo(t *testing.T) {
-	info, err := GetDownloadInfoByAidCid(VideoID, Avid, Cid)
-	log.Infof("video %v info %v", VideoID, utils.Json(info))
-	require.Nil(t, err)
-	err = authVideo(VideoID, info.Url)
-	require.Nil(t, err)
-	wc := new(WriteCounter)
-	hash := md5.New()
-	NewVideoDownloader(info, io.MultiWriter(wc, hash)).Download()
-	require.EqualValues(t, info.Size, wc.GetCount())
-	require.Equal(t, MD5, hex.EncodeToString(hash.Sum(nil)))
-}
+// func TestDownloadVideo(t *testing.T) {
+//     info, err := GetDownloadInfoByAidCid(VideoID, Avid, Cid)
+//     log.Infof("video %v info %v", VideoID, utils.Json(info))
+//     require.Nil(t, err)
+//     err = authVideo(VideoID, info.Url)
+//     require.Nil(t, err)
+//     wc := new(WriteCounter)
+//     hash := md5.New()
+//     NewVideoDownloader(info, io.MultiWriter(wc, hash)).Download()
+//     require.EqualValues(t, info.Size, wc.GetCount())
+//     require.Equal(t, MD5, hex.EncodeToString(hash.Sum(nil)))
+// }
 
 func TestAuthVideo(t *testing.T) {
 	info, err := GetDownloadInfoByAidCid(VideoID, Avid, Cid)
