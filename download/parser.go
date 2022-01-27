@@ -148,10 +148,10 @@ func (p *UrlProcessor) QueryAidCids() error {
 				log.Infof("parse page %v, part %v success", pageNo, part)
 				playUrls = append(playUrls, url)
 			}
-			if len(playUrls) == 1 {
-				log.Infof("only 1 video, use title %v for part name", title)
-				playUrls[0].PartName = title
-			}
+			// if len(playUrls) == 1 {
+			//     log.Infof("only 1 video, use title %v for part name", title)
+			//     playUrls[0].PartName = title
+			// }
 			log.Infof("parse url for %v success, aid %v, cids count %v", p.videoId, avid, len(playUrls))
 			p.urls = playUrls
 			// parse is over

@@ -53,10 +53,10 @@ func main() {
 		if err != nil {
 			panic(err)
 		}
-		fileName := video.PartName + "." + info.Format
-		if len(infos) > 1 {
-			fileName = video.Title + " - " + fileName
-		}
+		fileName := video.Title + " - " + video.PartName + "." + info.Format
+		// if len(infos) > 1 {
+		//     fileName = video.Title + " - " + fileName
+		// }
 		fileName = strings.ReplaceAll(fileName, "/", " ")
 		log.Infof("start download file %v, size %v bytes", fileName, info.Size)
 		of, err := os.OpenFile(fileName, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0644)
