@@ -38,26 +38,19 @@ func main() {
 		panic(err)
 	}
 	// filter video infos
-	idx := 0
-	for _, info := range infos {
-		if pageMatch(info.Page) {
-			infos[idx] = info
-			idx++
-		}
-	}
-	infos = infos[:idx]
 	// fmt.Printf("%v\n", utils.Json(resp))
+	replacer := strings.NewReplacer("/", " ", "|", " ")
 	for _, video := range infos {
+		if !pageMatch(video.Page) {
+			continue
+		}
 		log.Infof("process avid %v, cid %v", video.Avid, video.Cid)
 		info, err := download.GetDownloadInfoByAidCid(id, video.Avid, video.Cid)
 		if err != nil {
 			panic(err)
 		}
 		fileName := video.Title + " - " + video.PartName + "." + info.Format
-		// if len(infos) > 1 {
-		//     fileName = video.Title + " - " + fileName
-		// }
-		fileName = strings.ReplaceAll(fileName, "/", " ")
+		fileName = replacer.Replace(fileName)
 		log.Infof("start download file %v, size %v bytes", fileName, info.Size)
 		of, err := os.OpenFile(fileName, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0644)
 		if err != nil {
