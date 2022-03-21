@@ -55,7 +55,7 @@ func buildFrags(info *DownloadInfo) []*VideoFragment {
 		}
 		frags = append(frags, frag)
 	}
-	log.Infof("frags count %v", len(frags))
+	log.Infof("file size %v", consts.Byte(info.Size))
 	return frags
 }
 
