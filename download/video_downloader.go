@@ -25,24 +25,6 @@ type VideoFragment struct {
 	End   int64
 }
 
-type Bool int32
-
-func (b *Bool) Get() bool {
-	return atomic.LoadInt32((*int32)(b)) == 1
-}
-
-func (b *Bool) Set(val bool) {
-	if val {
-		atomic.StoreInt32((*int32)(b), 1)
-		return
-	}
-	atomic.StoreInt32((*int32)(b), 0)
-}
-
-func (b *Bool) Clear() {
-	atomic.StoreInt32((*int32)(b), 0)
-}
-
 type VideoDownloader struct {
 	downInfo *DownloadInfo
 	wg       *sync.WaitGroup
@@ -53,6 +35,7 @@ type VideoDownloader struct {
 
 	downIdx int64
 	redIdx  int64
+	pg      *ProgressBar
 }
 
 func buildFrags(info *DownloadInfo) []*VideoFragment {
@@ -86,6 +69,7 @@ func NewVideoDownloader(info *DownloadInfo, out *os.File) *VideoDownloader {
 		downIdx:  0,
 		errVal:   &atomic.Value{},
 	}
+	d.pg = NewProgressBar(info.Size, d.wg)
 	d.count = int64(len(d.frags))
 
 	return d
@@ -96,7 +80,7 @@ func (d *VideoDownloader) DownloadFragment(frag *VideoFragment) ([]byte, error) 
 
 	// auth audio
 	if err := authVideo(info.VideoID, info.Url); err != nil {
-		log.Errorf("auth video error: %v", err)
+		// log.Errorf("auth video error: %v", err)
 		return nil, err
 	}
 
@@ -147,9 +131,10 @@ func (d *VideoDownloader) DownloadFragment(frag *VideoFragment) ([]byte, error) 
 	buf.Grow(consts.FragSize)
 	buf.Reset()
 
-	_, err = io.Copy(buf, resp.Body)
+	wr := io.MultiWriter(buf, d.pg)
+	_, err = io.Copy(wr, resp.Body)
 	if err != nil {
-		log.Errorf("read resp data error: %v", err)
+		// log.Errorf("read resp data error: %v", err)
 		return nil, err
 	}
 
@@ -159,43 +144,48 @@ func (d *VideoDownloader) DownloadFragment(frag *VideoFragment) ([]byte, error) 
 }
 
 func (d *VideoDownloader) startWorker(id int) {
-	defer d.wg.Done()
+	defer func() {
+		d.wg.Done()
+		if d.errVal.Load() != nil {
+			d.pg.Stop()
+		}
+	}()
 	for {
 		// check error
 		if err := d.errVal.Load(); err != nil {
-			log.Infof("error detected: %v", err)
+			// log.Infof("error detected: %v", err)
 			return
 		}
 		idx := atomic.AddInt64(&d.downIdx, 1) - 1
 		if idx >= int64(len(d.frags)) {
-			log.Infof("worker %v exit", id)
+			// log.Infof("worker %v exit", id)
 			return
 		}
 
 		frag := d.frags[idx]
 		// random sleep
 		time.Sleep(time.Duration(rand.Intn(100)+200) * time.Millisecond)
-		log.Infof("download frag %v, %v - %v", idx, frag.Begin, frag.End)
+		// log.Infof("download frag %v, %v - %v", idx, frag.Begin, frag.End)
 		data, err := d.DownloadFragment(frag)
 		if err != nil {
-			log.Errorf("download %v error: %v", idx, err)
+			// log.Errorf("download %v error: %v", idx, err)
 			d.errVal.Store(err)
 			return
 		}
 
 		if err := d.errVal.Load(); err != nil {
-			log.Infof("error detected: %v\n", err)
+			// log.Infof("error detected: %v\n", err)
 			return
 		}
 
 		_, err = d.out.WriteAt(data, frag.Begin)
 		if err != nil {
-			log.Errorf("write file error: %v", err)
+			// log.Errorf("write file error: %v", err)
 			d.errVal.Store(err)
 			return
 		}
 
-		log.Infof("download frag %v success", idx)
+		// log.Infof("download frag %v success", idx)
 	}
 }
 
