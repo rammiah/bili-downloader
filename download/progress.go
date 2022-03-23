@@ -1,7 +1,6 @@
 package download
 
 import (
-	"fmt"
 	"os"
 	"strings"
 	"sync"
@@ -33,7 +32,7 @@ func NewProgressBar(total int64, wg *sync.WaitGroup) *ProgressBar {
 
 func (p *ProgressBar) print(wg *sync.WaitGroup) {
 	defer func() {
-		fmt.Printf("progress bar exited\n")
+		// fmt.Printf("progress bar exited\n")
 		wg.Done()
 	}()
 	ticker := time.NewTicker(time.Millisecond * 30)
@@ -49,16 +48,16 @@ func (p *ProgressBar) print(wg *sync.WaitGroup) {
 		if done >= p.Total {
 			percent = 100
 		}
-		if percent > int(p.lastPercent) {
-			cmd := strings.Repeat("\b", 200) + consts.Byte(done).String() + "/" + consts.Byte(p.Total).String() +
-				" [" + strings.Repeat("#", percent) + strings.Repeat(" ", 100-percent) + "]"
-			if percent >= 100 {
-				cmd += "\n"
-			}
-			os.Stdout.WriteString(cmd)
-			os.Stdout.Sync()
-			p.lastPercent = int64(percent)
+		// if percent > int(p.lastPercent) {
+		cmd := strings.Repeat("\b", 200) + consts.Byte(done).String() + "/" + consts.Byte(p.Total).String() +
+			" [" + strings.Repeat("#", percent) + strings.Repeat(" ", 100-percent) + "]"
+		if percent >= 100 {
+			cmd += "\n"
 		}
+		os.Stdout.WriteString(cmd)
+		os.Stdout.Sync()
+		p.lastPercent = int64(percent)
+		// }
 	}
 }
 
